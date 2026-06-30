@@ -1,0 +1,10 @@
+{
+  "name": "@reneza/pi-codegraph",
+  "version": "0.1.0",
+  "description": "Pi-agent wrapper around codebase-memory-mcp: derived code knowledge (call graphs, blast radius) over a harness-owned trust boundary",
+  "type": "module",
+  "bin": { "pi-codegraph": "./pi-codegraph" },
+  "scripts": { "test": "bash test/run.sh" },
+  "files": ["pi-codegraph", "src/", "vendor/", "README.md"],
+  "license": "MIT"
+}

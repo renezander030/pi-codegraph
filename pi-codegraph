@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+// pi-codegraph — Pi-agent wrapper around the codebase-memory-mcp server.
+// Agent-first CLI: JSON output by default, -H/--human for a table.
+// Built on cli-foundation (vendored at ./vendor/foundation.js).
+import * as fdn from './vendor/foundation.js';
+import { commands } from './src/cli.js';
+
+fdn.run({ commands, help: commands.help }, process.argv.slice(2));
