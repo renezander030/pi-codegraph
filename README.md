@@ -26,12 +26,17 @@ pi-codegraph doctor                                     # confirm it's found
 ```sh
 pi-codegraph doctor                       # is the engine installed?
 pi-codegraph trust --repo . --label app   # register this repo as a codegraph source
+pi-codegraph index --repo .               # parse the repo into the graph (run once, before querying)
 pi-codegraph arch --repo . -H             # architecture overview
 pi-codegraph trace ProcessOrder --direction inbound   # who calls it
 pi-codegraph impact                       # blast radius of the current git diff
-pi-codegraph search "auth middleware"     # semantic graph search
+pi-codegraph search "auth middleware"     # graph search (search_graph, BM25 + line ranges)
 pi-codegraph query trace_path --args '{"function_name":"main","depth":3}'
 ```
+
+The engine keys each project by a slug of its absolute path; the convenience
+commands (and `query`) resolve that `project` from `--repo` for you, so you never
+hand-pass it. `index` must run before any query — the engine has no data otherwise.
 
 `plan` shows the exact JSON-RPC it would send without launching anything:
 
@@ -47,10 +52,11 @@ pi-codegraph plan get_architecture --repo . -H
 | `config-bin <path>` | Pin the engine binary path. |
 | `trust [--label L]` | Register a repo as a trusted codegraph source. |
 | `repos` | List trusted repos. |
+| `index` | Parse the repo into the knowledge graph (run before any query). |
 | `tools` | List the live server's tools. |
 | `trace <fn> [--direction] [--depth]` | Call chain into/out of a function. |
 | `arch` / `impact` / `schema` | Architecture, git-diff blast radius, graph schema. |
-| `search <q>` / `snippet <qname>` | Semantic search; source for one symbol. |
+| `search <q> [--limit N]` / `snippet <qname>` | Graph search (search_graph); source for one symbol. |
 | `query <tool> [--args JSON]` | Call any of the engine's tools directly. |
 | `plan <tool> [--args JSON]` | Print the JSON-RPC request (no spawn). |
 

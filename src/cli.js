@@ -14,6 +14,13 @@ import { resolveBin, setBin, repoTrust, trustRepo, readRegistry, CONFIG_PATH, RE
 
 const repoOf = (flags) => path.resolve(flags.repo || process.cwd());
 
+// The codebase-memory-mcp engine keys each indexed project by a slug of its
+// absolute root path (e.g. /Users/x/foo-bar -> Users-x-foo-bar), and every query
+// tool (get_architecture, trace_path, detect_changes, search_graph, query_graph)
+// requires that `project` name. We resolve it from the repo so callers never have
+// to hand-pass --args '{"project":...}'. Matches the engine's list_projects.name.
+const projectSlug = (repo) => path.resolve(repo).replace(/^[\\/]+/, '').replace(/[\\/]+/g, '-');
+
 function parseArgsJson(flags) {
   if (!flags.args) return {};
   try { return JSON.parse(flags.args); }
@@ -115,26 +122,39 @@ export const commands = {
     const { flags, positional } = fdn.parseArgs(args, ['args', 'repo', 'override', 'timeout']);
     const tool = positional[0];
     if (!tool) { console.error('usage: pi-codegraph query <tool> [--args JSON] [--repo PATH] [--override R]'); process.exit(1); }
-    return runTool(tool, parseArgsJson(flags), flags, ctx);
+    const toolArgs = parseArgsJson(flags);
+    // Every query tool needs `project`; path-scoped tools take `repo_path` instead.
+    // Auto-resolve `project` when the caller supplied neither, so `query <tool>` works.
+    if (tool !== 'index_repository' && tool !== 'list_projects' &&
+        toolArgs.project == null && toolArgs.repo_path == null) {
+      toolArgs.project = projectSlug(repoOf(flags));
+    }
+    return runTool(tool, toolArgs, flags, ctx);
   },
-  // convenience wrappers over codebase-memory-mcp's tools
+  // index the trusted repo into the knowledge graph (must run before any query)
+  index(args, ctx) {
+    const { flags } = fdn.parseArgs(args, ['repo', 'override']);
+    return runTool('index_repository', { repo_path: repoOf(flags) }, flags, ctx);
+  },
+  // convenience wrappers over codebase-memory-mcp's tools. Each resolves `project`
+  // from the repo so the documented quick-start works without hand-passing --args.
   trace(args, ctx) {
     const { flags, positional } = fdn.parseArgs(args, ['repo', 'direction', 'depth', 'override']);
     if (!positional[0]) { console.error('usage: pi-codegraph trace <function> [--direction inbound|outbound] [--depth N]'); process.exit(1); }
-    return runTool('trace_path', { function_name: positional[0], direction: flags.direction || 'inbound', depth: Number(flags.depth) || 2 }, flags, ctx);
+    return runTool('trace_path', { project: projectSlug(repoOf(flags)), function_name: positional[0], direction: flags.direction || 'inbound', depth: Number(flags.depth) || 2 }, flags, ctx);
   },
-  arch(args, ctx) { return runTool('get_architecture', {}, fdn.parseArgs(args, ['repo', 'override']).flags, ctx); },
-  impact(args, ctx) { return runTool('detect_changes', {}, fdn.parseArgs(args, ['repo', 'override']).flags, ctx); },
-  schema(args, ctx) { return runTool('get_graph_schema', {}, fdn.parseArgs(args, ['repo', 'override']).flags, ctx); },
+  arch(args, ctx) { const { flags } = fdn.parseArgs(args, ['repo', 'override']); return runTool('get_architecture', { project: projectSlug(repoOf(flags)) }, flags, ctx); },
+  impact(args, ctx) { const { flags } = fdn.parseArgs(args, ['repo', 'override']); return runTool('detect_changes', { project: projectSlug(repoOf(flags)) }, flags, ctx); },
+  schema(args, ctx) { const { flags } = fdn.parseArgs(args, ['repo', 'override']); return runTool('get_graph_schema', { project: projectSlug(repoOf(flags)) }, flags, ctx); },
   search(args, ctx) {
-    const { flags, positional } = fdn.parseArgs(args, ['repo', 'override']);
+    const { flags, positional } = fdn.parseArgs(args, ['repo', 'override', 'limit']);
     if (!positional[0]) { console.error('usage: pi-codegraph search <query>'); process.exit(1); }
-    return runTool('semantic_query', { query: positional.join(' ') }, flags, ctx);
+    return runTool('search_graph', { project: projectSlug(repoOf(flags)), query: positional.join(' '), limit: Number(flags.limit) || 10 }, flags, ctx);
   },
   snippet(args, ctx) {
     const { flags, positional } = fdn.parseArgs(args, ['repo', 'override']);
     if (!positional[0]) { console.error('usage: pi-codegraph snippet <qualified_name>'); process.exit(1); }
-    return runTool('get_code_snippet', { qualified_name: positional[0] }, flags, ctx);
+    return runTool('get_code_snippet', { project: projectSlug(repoOf(flags)), qualified_name: positional[0] }, flags, ctx);
   },
   trust(args) { return trust(fdn.parseArgs(args, ['repo', 'label']).flags); },
   repos(args, ctx) { return repos(fdn.parseArgs(args, []).flags, ctx); },
@@ -150,15 +170,16 @@ Usage: pi-codegraph <command> [--repo PATH] [--human]
     config-bin <path>      pin the binary path (else PI_CODEGRAPH_BIN or PATH)
     trust [--label L]      register a repo as a trusted codegraph source
     repos                  list trusted repos
+    index                  parse the repo into the knowledge graph (run before querying)
 
-  QUERY (trust-gated; needs the binary):
+  QUERY (trust-gated; needs the binary; run \`index\` first):
     tools                  list the live server's tools
     trace <fn> [--direction inbound|outbound] [--depth N]   call chain
     arch                   architecture overview (languages, routes, hotspots)
     impact                 git-diff blast radius (detect_changes)
-    search <query>         semantic graph search
+    search <query> [--limit N]   graph search (search_graph, BM25 + line ranges)
     snippet <qname>        source for one symbol
-    query <tool> [--args JSON]   call any of the 14 tools directly
+    query <tool> [--args JSON]   call any of the 14 tools directly (project auto-injected)
     plan <tool> [--args JSON]    show the JSON-RPC we'd send (no spawn)
 
   --repo PATH              repo to query; default: cwd
