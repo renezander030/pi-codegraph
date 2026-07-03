@@ -1,8 +1,13 @@
 # pi-codegraph
 
-**A Pi-agent extension that wraps [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp).** It gives an agent *derived* knowledge — call graphs, blast radius, architecture — extracted from your code, so it stops re-greping the same repo every session. The companion to [pi-okf](https://github.com/renezander030/pi-okf) (which carries *authored* knowledge) and a sibling of [pi-gate](https://github.com/renezander030/pi-gate).
+**A trusted Pi-side wrapper around [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp).** It gives an agent *derived* knowledge — call graphs, blast radius, architecture — extracted from your code, so it stops re-greping the same repo every session. The companion to [pi-okf](https://github.com/renezander030/pi-okf) (which carries *authored* knowledge) and a sibling of [pi-gate](https://github.com/renezander030/pi-gate).
 
 codebase-memory-mcp parses a repo into a persistent knowledge graph (tree-sitter, 158 languages) and exposes ~14 MCP tools. `pi-codegraph` is the deterministic, agent-first front end: it resolves and speaks MCP to that binary, normalizes the results to JSON (or a `-H` table), and puts a harness-owned trust boundary in front of it.
+
+`pi-recall` is the standalone Pi extension that can use `pi-codegraph` as its
+first recall backend. Keep the boundary clear: `pi-codegraph` owns the trusted
+derived-codegraph wrapper; `pi-recall` owns the Pi slash commands and
+model-callable recall tool.
 
 ## Why a wrapper
 
@@ -43,6 +48,14 @@ hand-pass it. `index` must run before any query — the engine has no data other
 ```sh
 pi-codegraph plan get_architecture --repo . -H
 ```
+
+## Pi Extension
+
+This repo does not ship the Pi extension surface directly. Use the standalone
+`pi-recall` package when you want Pi slash commands such as `/recall`,
+`/recall-arch`, and `/recall-impact`.
+
+`pi-recall` delegates to this CLI and keeps this repo's trust gate intact.
 
 ## CLI
 
